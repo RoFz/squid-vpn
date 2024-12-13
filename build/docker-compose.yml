@@ -1,0 +1,61 @@
+services:
+  openvpn-client2:
+    image: rofz/openvpn-client:v2.4.12
+    container_name: openvpn-client2
+    hostname: openvpn-client2
+    cap_add:
+      - NET_ADMIN
+    dns:
+      - 192.168.1.17
+      - 192.168.1.18
+    networks:
+      - squid
+    ports:
+      - "3128:3128"
+      - "9176:9176"
+      - "9301:9301"
+    devices:
+      - /dev/net/tun
+    environment:
+      - ALLOWED_SUBNETS=192.168.1.0/24,172.16.0.0/12
+      - CREDENTIALS_FILE=credentials.txt
+      - KILL_SWITCH=yes
+    volumes:
+      - /share/Container/squid-vpn1/openvpn-config/:/config/
+    restart: always
+
+  squid-proxy:
+    image: 192.168.1.8:5000/squid-proxy:1.1.7
+    container_name: squid-proxy
+    network_mode: service:openvpn-client2
+    volumes:
+      - /share/CE_CACHEDEV2_DATA/Container/squid-vpn1/squid-config:/config
+      - /share/CE_CACHEDEV2_DATA/Container/squid-vpn1/squid-logs:/var/log/squid
+      - /share/CACHEDEV1_DATA/Custom-Container/squid-vpn1/squid-cache:/cache
+    restart: always
+    mem_reservation: 2gb
+    mem_limit: 4gb
+
+  openvpn-exporter2:
+    image: kumina/openvpn-exporter
+    container_name: openvpn-exporter2
+    network_mode: service:openvpn-client2
+    volumes:
+      - /share/CE_CACHEDEV2_DATA/Container/squid-vpn1/openvpn-config/openvpn-status.log:/etc/openvpn_exporter/client.status
+    command: ["-openvpn.status_paths","/etc/openvpn_exporter/client.status"]
+    restart: always
+
+  squid-exporter:
+    image: boynux/squid-exporter
+    container_name: squid-exporter
+    network_mode: service:openvpn-client2
+    environment:
+      - SQUID_PORT=3128
+      - SQUID_HOSTNAME=192.168.1.8
+    restart: always
+
+networks:
+  squid:
+    name: squid
+    driver: bridge
+    attachable: true
